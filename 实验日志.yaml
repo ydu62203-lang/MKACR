@@ -1,0 +1,6 @@
+消融实验每次实验需要改动文件：
+run_kgat.py
+RecBole-master/ml-1m.yaml
+RecBole-master/recbole/trainer/trainer.py
+RecBole-master/recbole/properties/model/KGAT.yaml
+RecBole-master/recbole/model/knowledge_aware_recommender/kgat.py
