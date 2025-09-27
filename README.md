@@ -39,80 +39,34 @@ pip install -e . --verbose
 
 ## Quick Start: Running MKACR
 
-Follow these steps to train and evaluate the MKACR model on a sample dataset like `ml-1m`.
+Our model is built upon the KGAT framework. Running an experiment requires configuring several files and then executing a specific script.
 
-### 1. Prepare the Dataset
-RecBole will automatically download and process the dataset if it's not found in the `dataset/` directory.
+### 1. Configure the Dataset
+Open `RecBole-master/ml-1m.yaml` (or your chosen dataset's YAML file) to ensure the data loading paths and parameters are correct.
 
-### 2. Create a Configuration File
-Create a YAML configuration file to specify the model and its hyperparameters. For example, create a file named `run_mkacr.yaml` in the root directory with the following content.
-
-**`run_mkacr.yaml`:**
-```yaml
-# Model and dataset configuration
-model: MKACR
-dataset: ml-1m
-
-# Training and evaluation settings
-stopping_step: 10
-epochs: 100
-train_batch_size: 4096
-eval_batch_size: 4096
-load_col:
-    inter: [user_id, item_id, rating, timestamp]
-    kg: [head_id, relation_id, tail_id]
-
-# MKACR-specific hyperparameters
-embedding_size: 64
-reg_weight: 1.e-5
-context_hops: 2
-
-# For adversarial training (if applicable)
-adv_weight: 0.1
-
-# Evaluation metrics
-metrics: [Recall, MRR, NDCG, Hit, Precision]
-topk: [10, 20]
-valid_metric: MRR@10
-```
+### 2. Configure Model Hyperparameters
+Open `RecBole-master/recbole/properties/model/KGAT.yaml`. This file is used to control the hyperparameters for our MKACR model. You can directly modify parameters like `embedding_size`, `reg_weight`, `context_hops`, etc., in this file.
 
 ### 3. Run the Model
-Execute the following command from the repository's root directory. The script will use the model (`MKACR`), dataset (`ml-1m`), and custom parameters defined in your YAML file.
+Execute the `run_kgat.py` script from the root directory to start training and evaluation. This script is set up to run our MKACR model within the KGAT framework.
 
 ```bash
-python run_recbole.py --config_files=run_mkacr.yaml
+python run_kgat.py
 ```
 
-The training process will begin, and you will see output similar to the following:
-```
-INFO ml-1m
-The number of users: 6041
-The number of items: 3707
-...
-INFO MKACR(
-  (user_embedding): Embedding(6041, 64)
-  (item_embedding): Embedding(3707, 64)
-  ...
-)
-Trainable parameters: XXXXXX
-INFO epoch 0 training [time: X.XXs, train loss: X.XXXX]
-INFO epoch 0 evaluating [time: X.XXs, valid_score: X.XXXX]
-INFO valid result:
-recall@10: X.XXXX  mrr@10: X.XXXX  ndcg@10: X.XXXX  hit@10: X.XXXX  precision@10: X.XXXX
-...
-INFO Finished training, best eval result in epoch XX
-INFO best valid result:
-recall@10: X.XXXX  mrr@10: X.XXXX  ndcg@10: X.XXXX  hit@10: X.XXXX  precision@10: X.XXXX
-INFO test result:
-recall@10: X.XXXX  mrr@10: X.XXXX  ndcg@10: X.XXXX  hit@10: X.XXXX  precision@10: X.XXXX
-```
+The script will use the configurations you set in the YAML files. The training process will begin, and you will see the evaluation results printed in the console.
 
 ## Implementation Details
 
-To implement the MKACR model, we made the following key modifications to the standard RecBole framework:
-* **`recbole/model/knowledge_aware_recommender/mkacr.py`**: This file contains the core implementation of the MKACR model architecture. It is built upon the KGAT model as a structural baseline.
-* **`recbole/trainer/trainer.py`**: The trainer has been slightly modified to accommodate the adversarial contrastive learning loop required by our model.
-* **`recbole/properties/model/MKACR.yaml`**: Default hyperparameters for the MKACR model are defined here. These can be overridden using a custom configuration file as shown in the Quick Start section.
+To implement the MKACR model, we performed a deep integration and modification of the KGAT model within the RecBole framework. Running our model requires understanding and configuring the following core files:
+
+* **`run_kgat.py`**: This is the main script for running our experiments. We have modified it to load the MKACR model and its corresponding configurations.
+* **`RecBole-master/ml-1m.yaml`**: The configuration file for the dataset. You will need to configure the path and loading parameters for `ml-1m` or other datasets in this file.
+* **`RecBole-master/recbole/trainer/trainer.py`**: The core trainer file. We have modified this file to support the model's unique adversarial contrastive learning training process.
+* **`RecBole-master/recbole/properties/model/KGAT.yaml`**: The default parameter file for the KGAT model. Our MKACR model reuses this file to define hyperparameters. You can directly modify parameters such as `embedding_size` and `reg_weight` here.
+* **`RecBole-master/recbole/model/knowledge_aware_recommender/mkacr.py`**: The main implementation code for the MKACR model. This file implements the core architecture of the model, using KGAT as the foundational framework.
+
+Furthermore, a key innovation of this implementation is the introduction of support for multiple geometric spaces. We have added embedding calculation code files for **Hyperbolic Space**, **Euclidean Space**, and **Complex Space**, which are crucial for achieving multi-space knowledge graph embeddings.
 
 ## Cite
 
