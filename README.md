@@ -1,87 +1,132 @@
-# Official Implementation for "Multi-Space Knowledge Graph Embedding and Adversarial Contrastive Learning for Recommendation"
+# MKACR on RecBole
 
-This repository contains the official source code and configuration files to reproduce the results for our paper, "Multi-Space Knowledge Graph Embedding and Adversarial Contrastive Learning for Recommendation".
+This repository contains the official implementation for the paper **"Multi-Space Knowledge Graph Embedding and Adversarial Contrastive Learning for Recommendation"**.
 
-Our proposed model, **MKACR**, is implemented within a modified version of the [RecBole](https://github.com/RUCAIBox/RecBole) framework. To facilitate reproducibility, we provide the complete source code.
+Our model, **MKACR**, is developed based on the comprehensive recommendation library [RecBole](https://github.com/RUCAIBox/RecBole).
 
-## Code Structure
+[Paper (Link to be added)] | [Code Repository](https://github.com/ydu62203-lang/recbole)
 
-Our implementation involves modifications to several files within the RecBole library. The key components of our work are located in the following files:
+---
 
-* **1. Main Execution Script (`run_kgat.py`)**: The primary script to launch the training and evaluation of the MKACR model.
-* **2. Model Implementation (`recbole/model/knowledge_aware_recommender/kgat.py`)**: This file contains the core implementation of our proposed **MKACR** model.
-    > *Note: For seamless integration with the existing framework, the original `mkacr.py` file has been renamed to `kgat.py` to replace the base KGAT model.*
-* **3. Custom Trainer (`recbole/trainer/trainer.py`)**: This file has been modified to include a custom `KGATTrainer` class, which handles the specific multi-task training loop required by MKACR (knowledge distillation, recommendation loss, etc.).
-* **4. Model Hyperparameters (`recbole/properties/model/KGAT.yaml`)**: This YAML file defines the default hyperparameters for the MKACR model.
-* **5. Dataset Configuration (`ml-1m.yaml`)**: An example configuration file specifying the data processing and evaluation settings for the MovieLens-1M dataset.
+## Overview
 
-## Setup and Installation
+**MKACR** is a novel knowledge-aware recommendation model that leverages multi-space knowledge graph embeddings and an adversarial contrastive learning strategy. By projecting entities and relations into distinct spaces, our model captures complex semantics within the knowledge graph. The adversarial contrastive learning component ensures that the embeddings are robust and highly discriminative, leading to improved recommendation performance.
 
-Please follow these steps to set up the environment and run the model.
+This implementation uses the powerful and flexible RecBole framework, which provides a unified structure for data processing, model training, and evaluation. We have integrated MKACR as a new knowledge-aware recommender and adapted parts of the training process to support its unique adversarial mechanism.
 
-**Step 1: Clone the Repository**
+<p align="center">
+  <img src="asset/framework.png" alt="RecBole v0.1 architecture" width="600">
+  <br>
+  <b>Figure</b>: The Overall Architecture of the RecBole Framework
+</p>
 
-Clone this repository to your local machine.
+## Installation
 
+Our code requires Python 3.7 or later and PyTorch 1.7.0 or later. Please ensure your environment meets these requirements.
+
+### 1. Clone the Repository
+Clone this repository which contains the MKACR model and the modified RecBole framework.
 ```bash
 git clone [https://github.com/ydu62203-lang/recbole.git](https://github.com/ydu62203-lang/recbole.git)
 cd recbole
 ```
 
-**Step 2: Create a Virtual Environment (Recommended)**
-
-It is highly recommended to use a virtual environment to manage dependencies.
-
-```bash
-# Create a new virtual environment
-python -m venv venv
-
-# Activate the environment
-# On Linux/macOS:
-source venv/bin/activate
-# On Windows:
-# venv\Scripts\activate
-```
-
-**Step 3: Install Dependencies**
-
-Install the modified RecBole framework and all required packages from the source code.
-
+### 2. Install Dependencies
+Install all the required packages, including RecBole in editable mode. This allows you to use the MKACR model seamlessly.
 ```bash
 pip install -e . --verbose
 ```
 
-## Running the Experiment
+## Quick Start: Running MKACR
 
-To run the experiment and reproduce the results reported in our paper, use the following command.
+Follow these steps to train and evaluate the MKACR model on a sample dataset like `ml-1m`.
 
-**Command:**
+### 1. Prepare the Dataset
+RecBole will automatically download and process the dataset if it's not found in the `dataset/` directory.
 
-```bash
-python run_kgat.py --dataset_config=ml-1m
+### 2. Create a Configuration File
+Create a YAML configuration file to specify the model and its hyperparameters. For example, create a file named `run_mkacr.yaml` in the root directory with the following content.
+
+**`run_mkacr.yaml`:**
+```yaml
+# Model and dataset configuration
+model: MKACR
+dataset: ml-1m
+
+# Training and evaluation settings
+stopping_step: 10
+epochs: 100
+train_batch_size: 4096
+eval_batch_size: 4096
+load_col:
+    inter: [user_id, item_id, rating, timestamp]
+    kg: [head_id, relation_id, tail_id]
+
+# MKACR-specific hyperparameters
+embedding_size: 64
+reg_weight: 1.e-5
+context_hops: 2
+
+# For adversarial training (if applicable)
+adv_weight: 0.1
+
+# Evaluation metrics
+metrics: [Recall, MRR, NDCG, Hit, Precision]
+topk: [10, 20]
+valid_metric: MRR@10
 ```
 
-This command will start the training and evaluation process for the MKACR model on the MovieLens-1M dataset.
+### 3. Run the Model
+Execute the following command from the repository's root directory. The script will use the model (`MKACR`), dataset (`ml-1m`), and custom parameters defined in your YAML file.
 
-* RecBole will automatically download and process the dataset on the first run.
-* The training progress, validation results, and final test results will be displayed in the console.
-* Model checkpoints will be saved in the `saved/` directory.
+```bash
+python run_recbole.py --config_files=run_mkacr.yaml
+```
+
+The training process will begin, and you will see output similar to the following:
+```
+INFO ml-1m
+The number of users: 6041
+The number of items: 3707
+...
+INFO MKACR(
+  (user_embedding): Embedding(6041, 64)
+  (item_embedding): Embedding(3707, 64)
+  ...
+)
+Trainable parameters: XXXXXX
+INFO epoch 0 training [time: X.XXs, train loss: X.XXXX]
+INFO epoch 0 evaluating [time: X.XXs, valid_score: X.XXXX]
+INFO valid result:
+recall@10: X.XXXX  mrr@10: X.XXXX  ndcg@10: X.XXXX  hit@10: X.XXXX  precision@10: X.XXXX
+...
+INFO Finished training, best eval result in epoch XX
+INFO best valid result:
+recall@10: X.XXXX  mrr@10: X.XXXX  ndcg@10: X.XXXX  hit@10: X.XXXX  precision@10: X.XXXX
+INFO test result:
+recall@10: X.XXXX  mrr@10: X.XXXX  ndcg@10: X.XXXX  hit@10: X.XXXX  precision@10: X.XXXX
+```
+
+## Implementation Details
+
+To implement the MKACR model, we made the following key modifications to the standard RecBole framework:
+* **`recbole/model/knowledge_aware_recommender/mkacr.py`**: This file contains the core implementation of the MKACR model architecture. It is built upon the KGAT model as a structural baseline.
+* **`recbole/trainer/trainer.py`**: The trainer has been slightly modified to accommodate the adversarial contrastive learning loop required by our model.
+* **`recbole/properties/model/MKACR.yaml`**: Default hyperparameters for the MKACR model are defined here. These can be overridden using a custom configuration file as shown in the Quick Start section.
 
 ## Cite
 
 If you find our work useful for your research, please consider citing our paper.
-
 ```bibtex
-@inproceedings{your_lastname_2025_mkacr,
-  author    = {First Author and Second Author and You},
+@inproceedings{your-lastname-202X-mkacr,
+  author    = {Author Name},
   title     = {Multi-Space Knowledge Graph Embedding and Adversarial Contrastive Learning for Recommendation},
-  booktitle = {Proceedings of the [Conference Name]},
-  year      = {2025}
+  booktitle = {Conference Name},
+  year      = {202X}
 }
 ```
 
-This implementation is built on the RecBole library. Please also consider citing their work:
-
+Please also cite the original **RecBole** papers, as our work is built upon their excellent library.
 ```bibtex
 @inproceedings{recbole[1.0],
   author    = {Wayne Xin Zhao and Shanlei Mu and Yupeng Hou and Zihan Lin and Yushuo Chen and Xingyu Pan and Kaiyuan Li and Yujie Lu and Hui Wang and Changxin Tian and Yingqian Min and Zhichao Feng and Xinyan Fan and Xu Chen and Pengfei Wang and Wendi Ji and Yaliang Li and Xiaoling Wang and Ji{-}Rong Wen},
@@ -91,4 +136,19 @@ This implementation is built on the RecBole library. Please also consider citing
   publisher = {{ACM}},
   year      = {2021}
 }
+
+@inproceedings{recbole[2.0],
+  author    = {Wayne Xin Zhao and Yupeng Hou and Xingyu Pan and Chen Yang and Zeyu Zhang and Zihan Lin and Jingsen Zhang and Shuqing Bian and Jiakai Tang and Wenqi Sun and Yushuo Chen and Lanling Xu and Gaowei Zhang and Zhen Tian and Changxin Tian and Shanlei Mu and Xinyan Fan and Xu Chen and Ji{-}Rong Wen},
+  title     = {RecBole 2.0: Towards a More Up-to-Date Recommendation Library},
+  booktitle = {{CIKM}},
+  pages     = {4722--4726},
+  publisher = {{ACM}},
+  year      = {2022}
+}
 ```
+
+## License
+This project is licensed under the [MIT License](./LICENSE).
+
+## Acknowledgments
+This project would not be possible without the foundational work of the [RecBole Team](https://recbole.io/about.html). We sincerely thank them for developing and maintaining this comprehensive library.
