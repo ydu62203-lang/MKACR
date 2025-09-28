@@ -21,13 +21,13 @@ val_interval:
 unused_col:
     inter: [rating]
 
-user_inter_num_interval: "[30,inf)"
-item_inter_num_interval: "[30,inf)"
+user_inter_num_interval: "[50,inf)"
+item_inter_num_interval: "[50,inf)"
 
 # data preprocessing for knowledge graph triples
 #kg_reverse_r: True
-entity_kg_num_interval: "[10,inf)"
-relation_kg_num_interval: "[10,inf)"
+entity_kg_num_interval: "[5,inf)"
+relation_kg_num_interval: "[5,inf)"
 
 # training and evaluation
 epochs: 500
