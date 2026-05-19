@@ -78,11 +78,11 @@ Furthermore, a key innovation of this implementation is the introduction of supp
 
 If you find our work useful for your research, please consider citing our paper.
 ```bibtex
-@inproceedings{your-lastname-202X-mkacr,
-  author    = {Author Name},
-  title     = {Multi-Space Knowledge Graph Embedding and Adversarial Contrastive Learning for Recommendation},
-  booktitle = {Conference Name},
-  year      = {202X}
+@article{2026-mkacr,
+  author  = {Qianying Wang and Shanyun Du and Meng Zhang},
+  title   = {Multi-Space Knowledge Graph Embedding and Adversarial Contrastive Learning for Recommendation},
+  journal = {Pattern Recognition},
+  year    = {2026}
 }
 ```
 
