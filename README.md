@@ -13,7 +13,7 @@ Our model, **MKACR**, is developed based on the comprehensive recommendation lib
 **MKACR** is a novel knowledge-aware recommendation model that leverages multi-space knowledge graph embeddings and an adversarial contrastive learning strategy. By projecting entities and relations into distinct spaces, our model captures complex semantics within the knowledge graph. The adversarial contrastive learning component ensures that the embeddings are robust and highly discriminative, leading to improved recommendation performance.
 
 <p align="center">
-  <img src="asset/Figure3student_model.png" alt="MKACR" width="1200">
+  <img src="asset/Figure_3-05.png" alt="MKACR" width="1200">
   <br>
   <b>Figure</b>: MKACR Framework
 </p>
