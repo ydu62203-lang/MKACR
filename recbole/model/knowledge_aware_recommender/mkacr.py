@@ -34,14 +34,13 @@ class N3(Regularizer):
         """Regularized complex embeddings https://arxiv.org/pdf/1806.07297.pdf"""
         norm = 0
         for f in factors:
-            norm += self.weight * torch.sum(
-                torch.abs(f) ** 3
-            )
+            norm += self.weight * torch.sum(torch.abs(f) ** 3)
         return norm / factors[0].shape[0]
 
 
 class Aggregator(nn.Module):
-    """ GNN Aggregator layer """
+    """GNN Aggregator layer"""
+
     def __init__(self, input_dim, output_dim, dropout, aggregator_type):
         super(Aggregator, self).__init__()
         self.input_dim = input_dim
@@ -51,11 +50,11 @@ class Aggregator(nn.Module):
 
         self.message_dropout = nn.Dropout(dropout)
 
-        if self.aggregator_type == 'gcn':
+        if self.aggregator_type == "gcn":
             self.W = nn.Linear(self.input_dim, self.output_dim)
-        elif self.aggregator_type == 'graphsage':
+        elif self.aggregator_type == "graphsage":
             self.W = nn.Linear(self.input_dim * 2, self.output_dim)
-        elif self.aggregator_type == 'bi':
+        elif self.aggregator_type == "bi":
             self.W1 = nn.Linear(self.input_dim, self.output_dim, dtype=torch.float64)
             self.W2 = nn.Linear(self.input_dim, self.output_dim, dtype=torch.float64)
         else:
@@ -64,16 +63,26 @@ class Aggregator(nn.Module):
         self.activation = nn.LeakyReLU()
 
     def forward(self, norm_matrix, ego_embeddings):
-        norm_matrix = norm_matrix.to(torch.float32) if norm_matrix.dtype == torch.float64 else norm_matrix
-        ego_embeddings = ego_embeddings.to(torch.float32) if ego_embeddings.dtype == torch.float64 else ego_embeddings
+        norm_matrix = (
+            norm_matrix.to(torch.float32)
+            if norm_matrix.dtype == torch.float64
+            else norm_matrix
+        )
+        ego_embeddings = (
+            ego_embeddings.to(torch.float32)
+            if ego_embeddings.dtype == torch.float64
+            else ego_embeddings
+        )
 
         side_embeddings = torch.sparse.mm(norm_matrix, ego_embeddings)
 
-        if self.aggregator_type == 'gcn':
+        if self.aggregator_type == "gcn":
             ego_embeddings = self.activation(self.W(ego_embeddings + side_embeddings))
-        elif self.aggregator_type == 'graphsage':
-            ego_embeddings = self.activation(self.W(torch.cat([ego_embeddings, side_embeddings], dim=1)))
-        elif self.aggregator_type == 'bi':
+        elif self.aggregator_type == "graphsage":
+            ego_embeddings = self.activation(
+                self.W(torch.cat([ego_embeddings, side_embeddings], dim=1))
+            )
+        elif self.aggregator_type == "bi":
             # Ensure ego_embeddings are of double type within the model definition or forward function
             ego_embeddings = ego_embeddings.to(torch.double)
 
@@ -94,28 +103,39 @@ class STUDENT(KnowledgeRecommender):
     graph to a new graph called collaborative knowledge graph (CKG). This model learns the representations of users and
     items by exploiting the structure of CKG. It adopts a GNN-based architecture and define the attention on the CKG.
     """
+
     input_type = InputType.PAIRWISE
 
     def __init__(self, config, dataset):
         super(STUDENT, self).__init__(config, dataset)
 
         # Load dataset info
-        self.ckg = dataset.ckg_graph(form='dgl', value_field='relation_id')
-        self.all_hs = torch.LongTensor(dataset.ckg_graph(form='coo', value_field='relation_id').row).to(self.device)
-        self.all_ts = torch.LongTensor(dataset.ckg_graph(form='coo', value_field='relation_id').col).to(self.device)
-        self.all_rs = torch.LongTensor(dataset.ckg_graph(form='coo', value_field='relation_id').data).to(self.device)
-        self.matrix_size = torch.Size([self.n_users + self.n_entities, self.n_users + self.n_entities])
+        self.ckg = dataset.ckg_graph(form="dgl", value_field="relation_id")
+        self.all_hs = torch.LongTensor(
+            dataset.ckg_graph(form="coo", value_field="relation_id").row
+        ).to(self.device)
+        self.all_ts = torch.LongTensor(
+            dataset.ckg_graph(form="coo", value_field="relation_id").col
+        ).to(self.device)
+        self.all_rs = torch.LongTensor(
+            dataset.ckg_graph(form="coo", value_field="relation_id").data
+        ).to(self.device)
+        self.matrix_size = torch.Size(
+            [self.n_users + self.n_entities, self.n_users + self.n_entities]
+        )
 
         # Load parameters info
-        self.embedding_size = config['embedding_size']
-        self.kg_embedding_size = config['kg_embedding_size']
-        self.layers = [self.embedding_size] + config['layers']
-        self.aggregator_type = config['aggregator_type']
-        self.mess_dropout = config['mess_dropout']
-        self.reg_weight = config['reg_weight']
+        self.embedding_size = config["embedding_size"]
+        self.kg_embedding_size = config["kg_embedding_size"]
+        self.layers = [self.embedding_size] + config["layers"]
+        self.aggregator_type = config["aggregator_type"]
+        self.mess_dropout = config["mess_dropout"]
+        self.reg_weight = config["reg_weight"]
 
         # Generate intermediate data
-        self.A_in = self.init_graph()  # Init the attention matrix by the structure of CKG
+        self.A_in = (
+            self.init_graph()
+        )  # Init the attention matrix by the structure of CKG
         self.A_in_1 = self.A_in
         self.A_in_2 = self.A_in
         self.A_in_3 = self.A_in
@@ -124,20 +144,40 @@ class STUDENT(KnowledgeRecommender):
         affine = True
         self.projection_head = torch.nn.ModuleList()
         inner_size = sum(self.layers)
-        self.projection_head.append(torch.nn.Linear(inner_size, inner_size * 4, bias=False, dtype=torch.float64))
-        self.projection_head.append(torch.nn.BatchNorm1d(inner_size * 4, eps=1e-12, affine=affine, dtype=torch.float64))
-        self.projection_head.append(torch.nn.Linear(inner_size * 4, inner_size, bias=False, dtype=torch.float64))
-        self.projection_head.append(torch.nn.BatchNorm1d(inner_size, eps=1e-12, affine=affine, dtype=torch.float64))
+        self.projection_head.append(
+            torch.nn.Linear(inner_size, inner_size * 4, bias=False, dtype=torch.float64)
+        )
+        self.projection_head.append(
+            torch.nn.BatchNorm1d(
+                inner_size * 4, eps=1e-12, affine=affine, dtype=torch.float64
+            )
+        )
+        self.projection_head.append(
+            torch.nn.Linear(inner_size * 4, inner_size, bias=False, dtype=torch.float64)
+        )
+        self.projection_head.append(
+            torch.nn.BatchNorm1d(
+                inner_size, eps=1e-12, affine=affine, dtype=torch.float64
+            )
+        )
         self.mode = 0
 
         # Define layers and loss
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
         self.entity_embedding = nn.Embedding(self.n_entities, self.embedding_size)
         self.relation_embedding = nn.Embedding(self.n_relations, self.kg_embedding_size)
-        self.trans_w = nn.Embedding(self.n_relations, self.embedding_size * self.kg_embedding_size)
+        self.trans_w = nn.Embedding(
+            self.n_relations, self.embedding_size * self.kg_embedding_size
+        )
         self.aggregator_layers = nn.ModuleList()
-        for idx, (input_dim, output_dim) in enumerate(zip(self.layers[:-1], self.layers[1:])):
-            self.aggregator_layers.append(Aggregator(input_dim, output_dim, self.mess_dropout, self.aggregator_type))
+        for idx, (input_dim, output_dim) in enumerate(
+            zip(self.layers[:-1], self.layers[1:])
+        ):
+            self.aggregator_layers.append(
+                Aggregator(
+                    input_dim, output_dim, self.mess_dropout, self.aggregator_type
+                )
+            )
         self.tanh = nn.Tanh()
         self.mf_loss = BPRLoss()
         self.reg_loss = EmbLoss()
@@ -147,7 +187,7 @@ class STUDENT(KnowledgeRecommender):
 
         # Parameters initialization
         self.apply(xavier_normal_initialization)
-        self.other_parameter_name = ['restore_user_e', 'restore_entity_e']
+        self.other_parameter_name = ["restore_user_e", "restore_entity_e"]
 
         # --- Hyperbolic KG Embedding Parameters ---
         self.data_type = torch.double
@@ -163,32 +203,52 @@ class STUDENT(KnowledgeRecommender):
         self.new_bh = nn.Embedding(self.n_entities, 1)
         self.new_bh.weight.data.zero_()
         self.new_bt.weight.data.zero_()
-        self.entity_embedding.weight.data = self.init_size * torch.randn((self.sizes[0], self.rank), dtype=self.data_type)
-        self.relation_embedding.weight.data = self.init_size * torch.randn((self.sizes[1], self.rank), dtype=self.data_type)
+        self.entity_embedding.weight.data = self.init_size * torch.randn(
+            (self.sizes[0], self.rank), dtype=self.data_type
+        )
+        self.relation_embedding.weight.data = self.init_size * torch.randn(
+            (self.sizes[1], self.rank), dtype=self.data_type
+        )
         c_init = torch.ones((self.sizes[1], 1), dtype=self.data_type)
         self.c = nn.Parameter(c_init, requires_grad=True)
         self.rel_diag = nn.Embedding(self.sizes[1], 2 * self.rank)
-        self.rel_diag.weight.data = 2 * torch.rand((self.sizes[1], 2 * self.rank), dtype=self.data_type) - 1.0
+        self.rel_diag.weight.data = (
+            2 * torch.rand((self.sizes[1], 2 * self.rank), dtype=self.data_type) - 1.0
+        )
         self.context_vec = nn.Embedding(self.sizes[1], self.rank)
-        self.context_vec.weight.data = self.init_size * torch.randn((self.sizes[1], self.rank), dtype=self.data_type)
+        self.context_vec.weight.data = self.init_size * torch.randn(
+            (self.sizes[1], self.rank), dtype=self.data_type
+        )
         self.act = nn.Softmax(dim=1)
         self.regularizer = N3(weight=1.0)
         if torch.cuda.is_available():
-            self.device = torch.device('cuda:0')
+            self.device = torch.device("cuda:0")
         else:
-            self.device = torch.device('cpu')
+            self.device = torch.device("cpu")
         self.to(self.device)
-        self.scale = torch.Tensor([1. / np.sqrt(self.rank)]).double().to(self.device)
-        self.bias = 'learn'
+        self.scale = torch.Tensor([1.0 / np.sqrt(self.rank)]).double().to(self.device)
+        self.bias = "learn"
 
         # --- Adversarial and Contrastive Noise Parameters ---
         self.rank = self.embedding_size
-        self.noise_u = torch.randn((self.n_users, self.rank * 2), dtype=self.data_type).to(self.device)
-        self.noise_p = torch.randn((self.n_entities, self.rank * 2), dtype=self.data_type).to(self.device)
-        self.noise_u_cts1 = torch.randn((self.n_users, self.rank * 2), dtype=self.data_type).to(self.device)
-        self.noise_u_cts2 = torch.randn((self.n_users, self.rank * 2), dtype=self.data_type).to(self.device)
-        self.noise_e_cts1 = torch.randn((self.n_entities, self.rank * 2), dtype=self.data_type).to(self.device)
-        self.noise_e_cts2 = torch.randn((self.n_entities, self.rank * 2), dtype=self.data_type).to(self.device)
+        self.noise_u = torch.randn(
+            (self.n_users, self.rank * 2), dtype=self.data_type
+        ).to(self.device)
+        self.noise_p = torch.randn(
+            (self.n_entities, self.rank * 2), dtype=self.data_type
+        ).to(self.device)
+        self.noise_u_cts1 = torch.randn(
+            (self.n_users, self.rank * 2), dtype=self.data_type
+        ).to(self.device)
+        self.noise_u_cts2 = torch.randn(
+            (self.n_users, self.rank * 2), dtype=self.data_type
+        ).to(self.device)
+        self.noise_e_cts1 = torch.randn(
+            (self.n_entities, self.rank * 2), dtype=self.data_type
+        ).to(self.device)
+        self.noise_e_cts2 = torch.randn(
+            (self.n_entities, self.rank * 2), dtype=self.data_type
+        ).to(self.device)
         self.noise_norm = 0.01
         self.global_counter = 0
 
@@ -209,24 +269,27 @@ class STUDENT(KnowledgeRecommender):
         shuffled_indices = all_indices[torch.randperm(total_size)]
 
         ui_rand_samples_1 = shuffled_indices[:subset_size]
-        ui_rand_samples_2 = shuffled_indices[subset_size:2 * subset_size]
-        ui_rand_samples_3 = shuffled_indices[2 * subset_size:3 * subset_size]
+        ui_rand_samples_2 = shuffled_indices[subset_size : 2 * subset_size]
+        ui_rand_samples_3 = shuffled_indices[2 * subset_size : 3 * subset_size]
 
         return ui_rand_samples_1, ui_rand_samples_2, ui_rand_samples_3
 
     def init_graph(self):
         r"""Initializes the attention matrix for the collaborative knowledge graph."""
         import dgl
+
         adj_list = []
         for rel_type in range(1, self.n_relations, 1):
-            edge_idxs = self.ckg.filter_edges(lambda edge: edge.data["relation_id"] == rel_type)
+            edge_idxs = self.ckg.filter_edges(
+                lambda edge: edge.data["relation_id"] == rel_type
+            )
             sub_graph = (
                 dgl.edge_subgraph(self.ckg, edge_idxs, relabel_nodes=False)
                 .adjacency_matrix(transpose=False, scipy_fmt="coo")
                 .astype("float")
             )
             rowsum = np.array(sub_graph.sum(1))
-            
+
             # A small positive constant to prevent division by zero
             epsilon = 1e-8
             rowsum[rowsum == 0] = epsilon
@@ -238,7 +301,9 @@ class STUDENT(KnowledgeRecommender):
             adj_list.append(norm_adj)
 
         final_adj_matrix = sum(adj_list).tocoo()
-        indices = torch.tensor(np.vstack((final_adj_matrix.row, final_adj_matrix.col)), dtype=torch.long)
+        indices = torch.tensor(
+            np.vstack((final_adj_matrix.row, final_adj_matrix.col)), dtype=torch.long
+        )
         values = torch.FloatTensor(final_adj_matrix.data)
         adj_matrix_tensor = torch.sparse.FloatTensor(indices, values, self.matrix_size)
         return adj_matrix_tensor.to(self.device)
@@ -284,7 +349,9 @@ class STUDENT(KnowledgeRecommender):
     def forward_1_noise(self):
         """Performs a forward pass with Gaussian noise using graph view 1."""
         ego_embeddings = self._get_ego_embeddings()
-        std_dev = 0.01 * torch.ones_like(ego_embeddings, dtype=self.data_type, device=ego_embeddings.device)
+        std_dev = 0.01 * torch.ones_like(
+            ego_embeddings, dtype=self.data_type, device=ego_embeddings.device
+        )
         noise = torch.normal(mean=0.0, std=std_dev)
         ego_embeddings = ego_embeddings + noise
         embeddings_list = [ego_embeddings]
@@ -298,7 +365,9 @@ class STUDENT(KnowledgeRecommender):
     def forward_2_noise(self):
         """Performs a forward pass with Gaussian noise using graph view 2."""
         ego_embeddings = self._get_ego_embeddings()
-        std_dev = 0.01 * torch.ones_like(ego_embeddings, dtype=self.data_type, device=ego_embeddings.device)
+        std_dev = 0.01 * torch.ones_like(
+            ego_embeddings, dtype=self.data_type, device=ego_embeddings.device
+        )
         noise = torch.normal(mean=0.0, std=std_dev)
         ego_embeddings = ego_embeddings + noise
         embeddings_list = [ego_embeddings]
@@ -312,7 +381,9 @@ class STUDENT(KnowledgeRecommender):
     def forward_3_noise(self):
         """Performs a forward pass with Gaussian noise using graph view 3."""
         ego_embeddings = self._get_ego_embeddings()
-        std_dev = 0.01 * torch.ones_like(ego_embeddings, dtype=self.data_type, device=ego_embeddings.device)
+        std_dev = 0.01 * torch.ones_like(
+            ego_embeddings, dtype=self.data_type, device=ego_embeddings.device
+        )
         noise = torch.normal(mean=0.0, std=std_dev)
         ego_embeddings = ego_embeddings + noise
         embeddings_list = [ego_embeddings]
@@ -362,7 +433,7 @@ class STUDENT(KnowledgeRecommender):
         """
         Samples indices proportionally from the embedding matrix.
         Can be extended to incorporate randomness and hard-negative mining.
-        
+
         Args:
             embeddings (torch.Tensor): The input embedding matrix.
             proportion (float): The proportion of samples to draw.
@@ -372,10 +443,14 @@ class STUDENT(KnowledgeRecommender):
         """
         num_samples = int(embeddings.shape[0] * proportion)
         weights = torch.ones(embeddings.shape[0])
-        sampler = WeightedRandomSampler(weights, num_samples=num_samples, replacement=False)
+        sampler = WeightedRandomSampler(
+            weights, num_samples=num_samples, replacement=False
+        )
         return list(sampler)
-    
-    def _calculate_adversarial_loss(self, interaction, forward_func, forward_noise_func):
+
+    def _calculate_adversarial_loss(
+        self, interaction, forward_func, forward_noise_func
+    ):
         """A helper function to compute recommendation and adversarial contrastive loss."""
         user = interaction[self.USER_ID]
         pos_item = interaction[self.ITEM_ID]
@@ -396,20 +471,27 @@ class STUDENT(KnowledgeRecommender):
         user_all_embeddings_n, entity_all_embeddings_n = forward_noise_func()
         u_embeddings_n = user_all_embeddings_n[user]
         pos_embeddings_n = entity_all_embeddings_n[pos_item]
-        
+
         u_embeddings_n_proj = self.projection_head_map(u_embeddings_n, self.mode)
-        pos_embeddings_n_proj = self.projection_head_map(pos_embeddings_n, 1 - self.mode)
-        
-        ui_cts_loss_n = self.cts_loss(u_embeddings_n_proj, pos_embeddings_n_proj, temp=1.0, batch_size=u_embeddings_n.shape[0])
-        
+        pos_embeddings_n_proj = self.projection_head_map(
+            pos_embeddings_n, 1 - self.mode
+        )
+
+        ui_cts_loss_n = self.cts_loss(
+            u_embeddings_n_proj,
+            pos_embeddings_n_proj,
+            temp=1.0,
+            batch_size=u_embeddings_n.shape[0],
+        )
+
         # Generate adversarial noise
         u_embeddings_n_proj.retain_grad()
         pos_embeddings_n_proj.retain_grad()
         ui_cts_loss_n.backward(retain_graph=True)
-        
+
         u_grad = u_embeddings_n_proj.grad.clone().detach()
         p_grad = pos_embeddings_n_proj.grad.clone().detach()
-        
+
         # Normalize the noise
         self.noise_u = self.noise_norm * F.normalize(u_grad, p=2, dim=-1)
         self.noise_p = self.noise_norm * F.normalize(p_grad, p=2, dim=-1)
@@ -417,35 +499,50 @@ class STUDENT(KnowledgeRecommender):
         # Adversarial contrastive learning
         gan_u_cts_embedding = u_embeddings_n[user] + self.noise_u
         gan_p_cts_embedding = entity_all_embeddings_n[pos_item] + self.noise_p
-        
-        gan_u_cts_embedding_proj = self.projection_head_map(gan_u_cts_embedding, self.mode)
-        gan_p_cts_embedding_proj = self.projection_head_map(gan_p_cts_embedding, 1 - self.mode)
+
+        gan_u_cts_embedding_proj = self.projection_head_map(
+            gan_u_cts_embedding, self.mode
+        )
+        gan_p_cts_embedding_proj = self.projection_head_map(
+            gan_p_cts_embedding, 1 - self.mode
+        )
 
         # Calculate the contrastive loss with adversarial noise
-        ui_cts_loss_adv = self.cts_loss(gan_u_cts_embedding_proj, gan_p_cts_embedding_proj, temp=1.0, batch_size=gan_u_cts_embedding.shape[0])
+        ui_cts_loss_adv = self.cts_loss(
+            gan_u_cts_embedding_proj,
+            gan_p_cts_embedding_proj,
+            temp=1.0,
+            batch_size=gan_u_cts_embedding.shape[0],
+        )
 
         # Switch the projection head mode for the next iteration
         self.mode = 1 - self.mode
-        
+
         return mf_loss + self.reg_weight * reg_loss + 0.01 * ui_cts_loss_adv
 
     def calculate_o_loss(self, interaction):
         """Calculates the loss for the 'original' graph view."""
         if self.restore_user_e is not None or self.restore_entity_e is not None:
             self.restore_user_e, self.restore_entity_e = None, None
-        return self._calculate_adversarial_loss(interaction, self.forward_2, self.forward_2_noise)
+        return self._calculate_adversarial_loss(
+            interaction, self.forward_2, self.forward_2_noise
+        )
 
     def calculate_h_loss(self, interaction):
         """Calculates the loss for the 'hyperbolic' graph view."""
         if self.restore_user_e is not None or self.restore_entity_e is not None:
             self.restore_user_e, self.restore_entity_e = None, None
-        return self._calculate_adversarial_loss(interaction, self.forward_1, self.forward_1_noise)
+        return self._calculate_adversarial_loss(
+            interaction, self.forward_1, self.forward_1_noise
+        )
 
     def calculate_e_loss(self, interaction):
         """Calculates the loss for the 'Euclidean' graph view."""
         if self.restore_user_e is not None or self.restore_entity_e is not None:
             self.restore_user_e, self.restore_entity_e = None, None
-        return self._calculate_adversarial_loss(interaction, self.forward_3, self.forward_3_noise)
+        return self._calculate_adversarial_loss(
+            interaction, self.forward_3, self.forward_3_noise
+        )
 
     def get_rhs(self, queries):
         """Get embeddings and biases of target entities."""
@@ -464,7 +561,9 @@ class STUDENT(KnowledgeRecommender):
         rot_q = givens_rotations(rot_mat, head).view((-1, 1, self.rank))
         ref_q = givens_reflection(ref_mat, head).view((-1, 1, self.rank))
         cands = torch.cat([ref_q, rot_q], dim=1).to(self.device)
-        context_vec = self.context_vec(queries[:, 1]).view((-1, 1, self.rank)).to(self.device)
+        context_vec = (
+            self.context_vec(queries[:, 1]).view((-1, 1, self.rank)).to(self.device)
+        )
         att_weights = torch.sum(context_vec * cands * self.scale, dim=-1, keepdim=True)
         att_weights = self.act(att_weights)
         att_q = torch.sum(att_weights * cands, dim=1)
@@ -478,9 +577,9 @@ class STUDENT(KnowledgeRecommender):
         lhs_e, lhs_biases = lhs
         rhs_e, rhs_biases = rhs
         score = self.similarity_score(lhs_e, rhs_e)
-        if self.bias == 'constant':
+        if self.bias == "constant":
             return self.gamma.item() + score
-        elif self.bias == 'learn':
+        elif self.bias == "learn":
             return lhs_biases + rhs_biases + score
         else:
             return score
@@ -520,7 +619,9 @@ class STUDENT(KnowledgeRecommender):
         pos_t_e = self.entity_embedding(pos_t).unsqueeze(1)
         neg_t_e = self.entity_embedding(neg_t).unsqueeze(1)
         r_e = self.relation_embedding(r)
-        r_trans_w = self.trans_w(r).view(r.size(0), self.embedding_size, self.kg_embedding_size)
+        r_trans_w = self.trans_w(r).view(
+            r.size(0), self.embedding_size, self.kg_embedding_size
+        )
         h_e = torch.bmm(h_e.double(), r_trans_w.double()).squeeze(1)
         pos_t_e = torch.bmm(pos_t_e.double(), r_trans_w.double()).squeeze(1)
         neg_t_e = torch.bmm(neg_t_e.double(), r_trans_w.double()).squeeze(1)
@@ -541,7 +642,7 @@ class STUDENT(KnowledgeRecommender):
         pos_rhs_e = (pos_t_real, pos_t_imag)
         neg_rhs_e = (neg_t_real, neg_t_imag)
         rel_e = (r_real, r_imag)
-        
+
         rel_norm = torch.sqrt(rel_e[0] ** 2 + rel_e[1] ** 2)
         cos = rel_e[0] / rel_norm
         sin = rel_e[1] / rel_norm
@@ -590,10 +691,23 @@ class STUDENT(KnowledgeRecommender):
         neg_t = interaction[self.NEG_TAIL_ENTITY_ID]
 
         lhs_e, r_e, pos_t_e, neg_t_e = self._get_rotate_embedding(h, r, pos_t, neg_t)
-        pos_tail_score = torch.sum(lhs_e[0] * pos_t_e[0] + lhs_e[1] * pos_t_e[1], 1, keepdim=True)
-        neg_tail_score = torch.sum(lhs_e[0] * neg_t_e[0] + lhs_e[1] * neg_t_e[1], 1, keepdim=True)
+        pos_tail_score = torch.sum(
+            lhs_e[0] * pos_t_e[0] + lhs_e[1] * pos_t_e[1], 1, keepdim=True
+        )
+        neg_tail_score = torch.sum(
+            lhs_e[0] * neg_t_e[0] + lhs_e[1] * neg_t_e[1], 1, keepdim=True
+        )
         kg_loss = F.softplus(pos_tail_score - neg_tail_score).mean()
-        kg_reg_loss = self.reg_loss(lhs_e[0], r_e[0], pos_t_e[0], neg_t_e[0], lhs_e[1], r_e[1], pos_t_e[1], neg_t_e[1])
+        kg_reg_loss = self.reg_loss(
+            lhs_e[0],
+            r_e[0],
+            pos_t_e[0],
+            neg_t_e[0],
+            lhs_e[1],
+            r_e[1],
+            pos_t_e[1],
+            neg_t_e[1],
+        )
         return kg_loss + self.reg_weight * kg_reg_loss
 
     def generate_transE_score3(self, hs, ts, r):
@@ -602,19 +716,21 @@ class STUDENT(KnowledgeRecommender):
         h_e = all_embeddings[hs]
         t_e = all_embeddings[ts]
         r_e = self.relation_embedding(r)
-        
+
         head_e_real, head_e_imag = torch.chunk(h_e, 2, dim=-1)
         tail_e_real, tail_e_imag = torch.chunk(t_e, 2, dim=-1)
         rel_e_real, rel_e_imag = torch.chunk(r_e, 2, dim=-1)
 
-        rel_norm = torch.sqrt(rel_e_real ** 2 + rel_e_imag ** 2)
+        rel_norm = torch.sqrt(rel_e_real**2 + rel_e_imag**2)
         cos = rel_e_real / rel_norm
         sin = rel_e_imag / rel_norm
-        
+
         lhs_e_real = head_e_real * cos - head_e_imag * sin
         lhs_e_imag = head_e_real * sin + head_e_imag * cos
-        
-        score = torch.mul(lhs_e_real, self.tanh(tail_e_real)).sum(dim=1) + torch.mul(lhs_e_imag, self.tanh(tail_e_imag)).sum(dim=1)
+
+        score = torch.mul(lhs_e_real, self.tanh(tail_e_real)).sum(dim=1) + torch.mul(
+            lhs_e_imag, self.tanh(tail_e_imag)
+        ).sum(dim=1)
         return score
 
     def generate_transE_score1(self, hs, ts, r):
@@ -634,7 +750,7 @@ class STUDENT(KnowledgeRecommender):
         att_weights = self.act(att_weights)
         att_q = torch.sum(att_weights * cands, dim=1)
         lhs = expmap0(att_q, c)
-        
+
         rel = expmap0(r_e, c)
         res = project(mobius_add(lhs, rel, c), c)
 
@@ -650,22 +766,31 @@ class STUDENT(KnowledgeRecommender):
         h_e = all_embeddings[hs]
         t_e = all_embeddings[ts]
         r_e = self.relation_embedding.weight[r]
-        r_trans_w = self.trans_w.weight[r].view(self.embedding_size, self.kg_embedding_size)
-        
+        r_trans_w = self.trans_w.weight[r].view(
+            self.embedding_size, self.kg_embedding_size
+        )
+
         h_e_proj = torch.matmul(h_e.double(), r_trans_w.double())
         t_e_proj = torch.matmul(t_e.double(), r_trans_w.double())
-        
+
         kg_score = torch.mul(t_e_proj, self.tanh(h_e_proj + r_e)).sum(dim=1)
         return kg_score
 
     def update_attentive_A(self):
         """Updates the attention matrices based on the current embeddings."""
-        kg_score_list_1, kg_score_list_2, kg_score_list_3, row_list, col_list = [], [], [], [], []
+        kg_score_list_1, kg_score_list_2, kg_score_list_3, row_list, col_list = (
+            [],
+            [],
+            [],
+            [],
+            [],
+        )
 
         for rel_idx in range(1, self.n_relations, 1):
             triple_index = torch.where(self.all_rs == rel_idx)[0]
-            if len(triple_index) == 0: continue
-            
+            if len(triple_index) == 0:
+                continue
+
             hs_rel = self.all_hs[triple_index]
             ts_rel = self.all_ts[triple_index]
             rs_rel = self.all_rs[triple_index]
@@ -673,19 +798,20 @@ class STUDENT(KnowledgeRecommender):
             kg_score1 = self.generate_transE_score1(hs_rel, ts_rel, rs_rel)
             kg_score2 = self.generate_transE_score2(hs_rel, ts_rel, rel_idx)
             kg_score3 = self.generate_transE_score3(hs_rel, ts_rel, rs_rel)
-            
+
             row_list.append(hs_rel)
             col_list.append(ts_rel)
             kg_score_list_1.append(kg_score1)
             kg_score_list_2.append(kg_score2)
             kg_score_list_3.append(kg_score3)
 
-        if not row_list: return
+        if not row_list:
+            return
 
         row = torch.cat(row_list, dim=0)
         col = torch.cat(col_list, dim=0)
         indices = torch.stack([row, col], dim=0)
-        
+
         # Move to CPU for sparse softmax, which is not supported on CUDA sparse tensors
         kg_score1 = torch.cat(kg_score_list_1, dim=0)
         A_in_1 = torch.sparse.FloatTensor(indices, kg_score1, self.matrix_size).cpu()
@@ -702,7 +828,7 @@ class STUDENT(KnowledgeRecommender):
     def predict(self, interaction):
         """
         Predicts the scores for given user-item pairs.
-        
+
         Args:
             interaction (Interaction): Contains user_id and item_id.
 
@@ -746,11 +872,11 @@ class STUDENT(KnowledgeRecommender):
             self.restore_user_e_3, self.restore_entity_e_3 = self.forward_3()
 
         u_embeddings_1 = self.restore_user_e_1[user]
-        i_embeddings_1 = self.restore_entity_e_1[:self.n_items]
+        i_embeddings_1 = self.restore_entity_e_1[: self.n_items]
         u_embeddings_2 = self.restore_user_e_2[user]
-        i_embeddings_2 = self.restore_entity_e_2[:self.n_items]
+        i_embeddings_2 = self.restore_entity_e_2[: self.n_items]
         u_embeddings_3 = self.restore_user_e_3[user]
-        i_embeddings_3 = self.restore_entity_e_3[:self.n_items]
+        i_embeddings_3 = self.restore_entity_e_3[: self.n_items]
 
         scores_1 = torch.matmul(u_embeddings_1, i_embeddings_1.transpose(0, 1))
         scores_2 = torch.matmul(u_embeddings_2, i_embeddings_2.transpose(0, 1))
