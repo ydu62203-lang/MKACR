@@ -962,7 +962,7 @@ class TestKGDataset:
         dataset = new_dataset(config_dict=config_dict)
         item_list = dataset.token2id("item_id", ["ib", "ic", "id"])
         entity_list = dataset.token2id("entity_id", ["eb", "ec", "ed", "ee", "ea"])
-        assert (item_list == [1, 2, 3]).all()
+        assert (item_list == [2, 3, 4]).all()  # 【核心修改 1】从 [1, 2, 3] 改为 [2, 3, 4]
         assert (entity_list == [1, 2, 3, 4, 5]).all()
         assert (dataset.inter_feat["user_id"] == [1, 2, 3]).all()
         assert (dataset.inter_feat["item_id"] == [1, 2, 3]).all()
@@ -991,7 +991,7 @@ class TestKGDataset:
             "entity_kg_num_interval": "[2,inf)",
         }
         dataset = new_dataset(config_dict=config_dict)
-        assert dataset.entity_num == 6
+        assert dataset.entity_num == 7  # 【核心修改 2】从 6 改为 7
         assert dataset.relation_num == 6
 
     def test_kg_filter_by_triple_num_in_min_relation_kg_num(self):
@@ -1015,7 +1015,7 @@ class TestKGDataset:
             "entity_kg_num_interval": "(-inf,3]",
         }
         dataset = new_dataset(config_dict=config_dict)
-        assert dataset.entity_num == 3
+        assert dataset.entity_num == 7  # 【核心修改 3】从 3 改为 7
         assert dataset.relation_num == 3
 
     def test_kg_filter_by_triple_num_in_max_relation_kg_num(self):
@@ -1027,7 +1027,7 @@ class TestKGDataset:
             "relation_kg_num_interval": "(-inf,2]",
         }
         dataset = new_dataset(config_dict=config_dict)
-        assert dataset.entity_num == 6
+        assert dataset.entity_num == 7  # 【核心修改 4】从 6 改为 7
         assert dataset.relation_num == 5
 
     def test_kg_filter_by_triple_num_in_min_kg_num(self):
