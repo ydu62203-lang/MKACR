@@ -20,7 +20,9 @@ jobs:
         shell: bash -l {0}
 
     steps:
+    # 顺便将 build job 里的 checkout 也升级到 v4，消除所有警告
     - uses: actions/checkout@v4
+    
     - name: Setup Miniconda
       uses: conda-incubator/setup-miniconda@v2
       with:
@@ -28,9 +30,11 @@ jobs:
         channels: conda-forge
         channel-priority: true
         auto-activate-base: true
+        
     # install setuptools as a interim solution for bugs in PyTorch 1.10.2 (#69904)
     - name: Install dependencies
       run: |
+        conda install pip -y  # <--- 【核心修复】：在这行用 conda 安装 pip，解决找不到模块的问题
         python -m pip install --upgrade pip
         pip install protobuf==3.19.0
         pip install hyperopt==0.2.5
@@ -48,27 +52,34 @@ jobs:
         pip install setuptools==59.5.0
         pip install plotly
         pip install kmeans-pytorch
+        
     # Use "python -m pytest" instead of "pytest" to fix imports
     - name: Test Overall
       run: |
         python run_recbole.py --model=BPR --epochs=2
+        
     - name: Test metrics
       run: |
         python -m pytest -v tests/metrics
+        
     - name: Test data
       run: |
         python -m pytest -v tests/data
+        
     - name: Test evaluation_setting
       run: |
         python -m pytest -v tests/evaluation_setting
+        
     - name: Test model
       run: |
         python -m pytest -v tests/model/test_model_auto.py
+        
     - name: Test config
       run: |
         python -m pytest -v tests/config/test_config.py
         export PYTHONPATH=.
         python tests/config/test_command_line.py --use_gpu=False --valid_metric=Recall@10 --split_ratio=[0.7,0.2,0.1] --metrics='["Recall"]' --topk=[10] --epochs=200 --eval_setting='LO_RS' --learning_rate=0.3
+        
     - name: Test hyper_tuning
       run: |
         python -m pytest -v tests/hyper_tuning/test_hyper_tuning.py
@@ -78,20 +89,27 @@ jobs:
   #      https://black.readthedocs.io/en/stable/integrations/github_actions.html
   lint:
     runs-on: ubuntu-latest
+    # 核心修改 1：赋予自动提交代码所需的写入权限
     permissions:
       contents: write
     steps:
+      # 核心修改 2：升级 checkout action 到 v4
       - uses: actions/checkout@v4
         with:
+          # 核心修改 3：获取完整历史记录，这是 auto-commit 正常工作的推荐配置
           fetch-depth: 0 
+          
       - name: Install dependencies
         run: |
           pip install black[jupyter]
+          
       - name: Test code format
         uses: psf/black@stable
         id: action-black
         with:
           options: "."
+          
+      # 核心修改 4：升级 auto-commit action 到 v5
       - name: Apply code-format changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
