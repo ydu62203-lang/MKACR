@@ -962,7 +962,9 @@ class TestKGDataset:
         dataset = new_dataset(config_dict=config_dict)
         item_list = dataset.token2id("item_id", ["ib", "ic", "id"])
         entity_list = dataset.token2id("entity_id", ["eb", "ec", "ed", "ee", "ea"])
-        assert (item_list == [2, 3, 4]).all()  # 【核心修改 1】从 [1, 2, 3] 改为 [2, 3, 4]
+        assert (
+            item_list == [2, 3, 4]
+        ).all()  # 【核心修改 1】从 [1, 2, 3] 改为 [2, 3, 4]
         assert (entity_list == [1, 2, 3, 4, 5]).all()
         assert (dataset.inter_feat["user_id"] == [1, 2, 3]).all()
         assert (dataset.inter_feat["item_id"] == [1, 2, 3]).all()
